@@ -1,0 +1,15 @@
+services:
+  appletv-chat:
+    build: .
+    image: appletv-chat:latest
+    container_name: appletv-chat
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - TZ=Asia/Shanghai
+      - DATA_DIR=/app/data
+    volumes:
+      - ./app:/app/app
+      - ./data:/app/data
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro

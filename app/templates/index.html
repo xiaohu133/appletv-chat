@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Apple TV 剪贴板助手</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Vue 3 CDN -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    * { -webkit-tap-highlight-color: transparent; }
+    body {
+      background-color: #0b0f19;
+      color: #f3f4f6;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      overscroll-behavior-y: none;
+    }
+    .chat-scroll {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+    }
+    .chat-scroll::-webkit-scrollbar {
+      width: 4px;
+    }
+    .chat-scroll::-webkit-scrollbar-thumb {
+      background-color: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+    }
+    .bubble-out {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      border-radius: 18px 18px 4px 18px;
+    }
+  </style>
+</head>
+<body class="h-[100dvh] flex flex-col overflow-hidden select-none">
+<div id="app" class="h-full flex flex-col max-w-lg mx-auto w-full relative">
+
+  <!-- 顶部导航栏 -->
+  <header class="bg-[#111827]/90 backdrop-blur-md border-b border-gray-800 px-4 py-3 flex items-center justify-between z-20 shrink-0">
+    <div class="flex items-center space-x-2">
+      <!-- 电视图标 & 状态 -->
+      <div class="relative">
+        <div class="w-9 h-9 rounded-full bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+          <i data-lucide="tv" class="w-5 h-5"></i>
+        </div>
+        <span class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full ring-2 ring-[#111827]"
+              :class="activeDevice ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-amber-500'"></span>
+      </div>
+      <div>
+        <div class="flex items-center space-x-1 cursor-pointer" @click="showDeviceModal = true">
+          <span class="font-semibold text-sm tracking-wide text-gray-100 max-w-[150px] truncate">
+            {{ activeDevice ? activeDevice.name : '未连接设备' }}
+          </span>
+          <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-gray-400"></i>
+        </div>
+        <div class="text-[11px] text-gray-400">
+          {{ activeDevice ? (activeDevice.address || '已连接就绪') : '点击配对' }}
+        </div>
+      </div>
+    </div>
+
+    <!-- 右侧设置按钮 -->
+    <button @click="showDeviceModal = true" 
+            class="p-2 rounded-xl text-gray-300 hover:text-white bg-gray-800/80 hover:bg-gray-700 active:scale-95 transition">
+      <i data-lucide="settings" class="w-5 h-5"></i>
+    </button>
+  </header>
+
+  <!-- 对话消息气泡流 (聊天界面) -->
+  <main ref="chatContainer" class="flex-1 overflow-y-auto p-4 space-y-4 chat-scroll">
+    <!-- 空状态提示 -->
+    <div v-if="history.length === 0" class="h-full flex flex-col items-center justify-center text-center px-6 text-gray-400">
+      <div class="w-16 h-16 rounded-2xl bg-gray-800/50 border border-gray-700/60 flex items-center justify-center text-blue-400 mb-4 shadow-inner">
+        <i data-lucide="send" class="w-8 h-8"></i>
+      </div>
+      <h3 class="text-base font-medium text-gray-200 mb-1">Apple TV 剪贴板助手</h3>
+      <p class="text-xs text-gray-400 leading-relaxed max-w-xs mb-4">
+        在下方输入框中粘贴播放源、网址、Token 或密码，点击发送即可瞬间同步到 Apple TV 屏幕。
+      </p>
+      <div v-if="!activeDevice" class="mt-2">
+        <button @click="showDeviceModal = true" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 active:scale-95 rounded-xl text-xs font-medium text-white shadow-lg shadow-blue-600/30 flex items-center space-x-1.5">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span>首次配对 Apple TV</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 消息气泡列表 -->
+    <div v-for="item in history" :key="item.id" class="flex flex-col items-end space-y-1">
+      <div class="bubble-out text-white px-4 py-2.5 max-w-[85%] shadow-md break-words select-text">
+        <div class="text-[14px] leading-relaxed select-text font-mono whitespace-pre-wrap">{{ item.text }}</div>
+      </div>
+      <div class="flex items-center space-x-2 text-[10px] text-gray-400 px-1">
+        <span>{{ item.time }}</span>
+        <span v-if="item.success" class="text-emerald-400">● 成功</span>
+        <span v-else class="text-red-400">● 失败</span>
+        <button @click="quickResend(item.text)" class="hover:text-blue-400 active:scale-90 transition p-0.5" title="重新发送">
+          <i data-lucide="rotate-cw" class="w-3 h-3"></i>
+        </button>
+        <button @click="copyText(item.text)" class="hover:text-blue-400 active:scale-90 transition p-0.5" title="复制">
+          <i data-lucide="copy" class="w-3 h-3"></i>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- 极简功能操作栏 (只保留 清空电视输入 和 退格键) -->
+  <div class="px-3 pt-2 bg-[#111827] border-t border-gray-800/80 flex items-center space-x-2">
+    <!-- 清空电视输入 -->
+    <button @click="sendClear" class="flex-1 flex items-center justify-center space-x-1.5 py-2 px-3 rounded-xl bg-gray-800/90 hover:bg-gray-700/90 text-amber-400 text-xs font-medium active:scale-95 transition border border-gray-700/60">
+      <i data-lucide="eraser" class="w-4 h-4"></i>
+      <span>清空电视输入</span>
+    </button>
+
+    <!-- 退格键 -->
+    <button @click="sendBackspace" class="flex-1 flex items-center justify-center space-x-1.5 py-2 px-3 rounded-xl bg-gray-800/90 hover:bg-gray-700/90 text-gray-200 text-xs font-medium active:scale-95 transition border border-gray-700/60">
+      <i data-lucide="delete" class="w-4 h-4 text-rose-400"></i>
+      <span>退格键 (Backspace)</span>
+    </button>
+  </div>
+
+  <!-- 底部聊天式输入框 -->
+  <footer class="bg-[#111827] px-3 pb-4 pt-2 border-t border-gray-800/60 flex items-end space-x-2 z-20">
+    <div class="flex-1 bg-gray-800/90 rounded-2xl border border-gray-700/80 focus-within:border-blue-500 transition px-3.5 py-2 flex items-center">
+      <textarea ref="inputBox" 
+                v-model="inputText" 
+                @keydown.enter.exact.prevent="handleSend"
+                rows="1"
+                placeholder="输入文本 / 粘贴长链接..." 
+                class="w-full bg-transparent text-gray-100 text-[15px] outline-none resize-none max-h-28 leading-5 font-mono"></textarea>
+      <button v-if="inputText" @click="inputText = ''" class="text-gray-400 hover:text-gray-200 ml-1 p-0.5">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <!-- 发送按钮 -->
+    <button @click="handleSend" 
+            :disabled="!inputText.trim() || sending"
+            class="w-11 h-11 rounded-2xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-white flex items-center justify-center shrink-0 active:scale-90 transition shadow-lg shadow-blue-600/30">
+      <i v-if="!sending" data-lucide="arrow-up" class="w-6 h-6"></i>
+      <i v-else data-lucide="loader-2" class="w-5 h-5 animate-spin"></i>
+    </button>
+  </footer>
+
+  <!-- 设备管理与配对 Modal -->
+  <div v-if="showDeviceModal" class="fixed inset-0 bg-black/75 z-40 flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-[#111827] border border-gray-700 rounded-2xl w-full max-w-md max-h-[85vh] flex flex-col overflow-hidden shadow-2xl">
+      <div class="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <i data-lucide="tv-2" class="w-5 h-5 text-blue-400"></i>
+          <h3 class="font-semibold text-gray-100">Apple TV 设备管理</h3>
+        </div>
+        <button @click="showDeviceModal = false" class="text-gray-400 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="p-5 overflow-y-auto space-y-5 text-sm">
+        <div>
+          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">已配对设备</div>
+          <div v-if="devices.length === 0" class="text-xs text-gray-400 py-2">暂无配对设备，请在下方输入 IP 配对</div>
+          <div v-else class="space-y-2">
+            <div v-for="dev in devices" :key="dev.identifier" 
+                 @click="selectDevice(dev)"
+                 class="p-3 rounded-xl border flex items-center justify-between cursor-pointer transition"
+                 :class="activeDevice && activeDevice.identifier === dev.identifier ? 'bg-blue-950/40 border-blue-500/60' : 'bg-gray-800/60 border-gray-700 hover:border-gray-600'">
+              <div class="flex items-center space-x-3">
+                <div class="w-8 h-8 rounded-lg bg-blue-600/20 text-blue-400 flex items-center justify-center">
+                  <i data-lucide="tv" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <div class="font-medium text-gray-200">{{ dev.name }}</div>
+                  <div class="text-xs text-gray-400">{{ dev.address }}</div>
+                </div>
+              </div>
+              <div class="flex items-center space-x-2">
+                <span v-if="activeDevice && activeDevice.identifier === dev.identifier" class="text-xs text-blue-400 font-medium">当前选用</span>
+                <button @click.stop="removeDevice(dev.id || dev.identifier)" class="p-1.5 text-gray-400 hover:text-red-400">
+                  <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="border-t border-gray-800 pt-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">新增直连配对</span>
+          </div>
+
+          <div class="flex space-x-2">
+            <input v-model="manualIp" type="text" placeholder="输入 Apple TV IP (如 192.168.100.171)" 
+                   class="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-100 outline-none focus:border-blue-500">
+            <button @click="startPairManual" class="px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded-xl text-xs font-medium text-white shrink-0">
+              发起配对
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PIN 码输入弹窗 -->
+  <div v-if="pairingSession" class="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4 backdrop-blur-md">
+    <div class="bg-[#111827] border border-blue-500/60 rounded-2xl w-full max-w-sm p-6 space-y-4 shadow-2xl text-center">
+      <div class="w-12 h-12 rounded-full bg-blue-600/20 text-blue-400 mx-auto flex items-center justify-center">
+        <i data-lucide="key-round" class="w-6 h-6"></i>
+      </div>
+      <div>
+        <h3 class="font-semibold text-gray-100 text-base">输入电视屏幕上的 PIN 码</h3>
+        <p class="text-xs text-gray-400 mt-1">Apple TV 屏幕现已显示 4 位数字密码</p>
+      </div>
+
+      <input v-model="pinInput" 
+             type="tel"
+             inputmode="numeric"
+             maxlength="6"
+             placeholder="0000" 
+             class="w-40 text-center tracking-[8px] text-3xl font-mono py-2 bg-gray-800 border border-gray-600 rounded-xl text-white outline-none focus:border-blue-500 mx-auto block">
+
+      <div class="flex space-x-3 pt-2">
+        <button @click="pairingSession = null" class="flex-1 py-2.5 rounded-xl bg-gray-800 text-gray-300 text-xs font-medium hover:bg-gray-700">
+          取消
+        </button>
+        <button @click="submitPin" :disabled="!String(pinInput).trim()" class="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-medium hover:bg-blue-500 disabled:opacity-40 shadow-lg shadow-blue-600/30">
+          确认连接
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast 提示框 -->
+  <div v-if="toastMsg" class="fixed top-4 inset-x-0 mx-auto w-max max-w-xs px-4 py-2 bg-gray-900/95 border border-gray-700 text-white text-xs rounded-full shadow-2xl z-50 flex items-center space-x-2 backdrop-blur-md animate-in fade-in">
+    <i data-lucide="info" class="w-4 h-4 text-blue-400"></i>
+    <span>{{ toastMsg }}</span>
+  </div>
+
+</div>
+
+<script>
+const { createApp, ref, onMounted, nextTick, watch } = Vue;
+
+createApp({
+  setup() {
+    const inputText = ref('');
+    const history = ref([]);
+    const devices = ref([]);
+    const activeDevice = ref(null);
+    const sending = ref(false);
+    const showDeviceModal = ref(false);
+    const manualIp = ref('192.168.100.171');
+    const pairingSession = ref(null);
+    const pinInput = ref('');
+    const toastMsg = ref('');
+    const chatContainer = ref(null);
+    const inputBox = ref(null);
+
+    const showToast = (msg, duration = 2500) => {
+      toastMsg.value = msg;
+      nextTick(() => lucide.createIcons());
+      setTimeout(() => { toastMsg.value = ''; }, duration);
+    };
+
+    const scrollToBottom = () => {
+      nextTick(() => {
+        if (chatContainer.value) {
+          chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+        }
+        lucide.createIcons();
+      });
+    };
+
+    const loadStatus = async () => {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        devices.value = data.devices || [];
+        if (data.settings && data.settings.default_device_id) {
+          activeDevice.value = devices.value.find(d => d.identifier === data.settings.default_device_id) || devices.value[0];
+        } else if (devices.value.length > 0) {
+          activeDevice.value = devices.value[0];
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
+    const loadHistory = async () => {
+      try {
+        const res = await fetch('/api/history');
+        history.value = await res.json();
+        scrollToBottom();
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
+    const handleSend = async () => {
+      const text = inputText.value.trim();
+      if (!text || sending.value) return;
+
+      sending.value = true;
+      try {
+        const res = await fetch('/api/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: text,
+            device_id: activeDevice.value ? activeDevice.value.identifier : null
+          })
+        });
+        const data = await res.json();
+        if (data.entry) {
+          history.value.push(data.entry);
+          scrollToBottom();
+        }
+        if (res.ok && data.ok) {
+          inputText.value = '';
+          showToast('✅ 文本已发送到 Apple TV');
+        } else {
+          showToast('❌ ' + (data.error || data.detail || '发送失败'));
+        }
+      } catch (e) {
+        showToast('❌ 网络请求失败');
+      } finally {
+        sending.value = false;
+        nextTick(() => {
+          if (inputBox.value) inputBox.value.focus();
+        });
+      }
+    };
+
+    const quickResend = (text) => {
+      inputText.value = text;
+      handleSend();
+    };
+
+    const copyText = async (text) => {
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast('📋 已复制到剪贴板');
+      } catch (e) {
+        showToast('复制失败');
+      }
+    };
+
+    const sendClear = async () => {
+      if (navigator.vibrate) navigator.vibrate(20);
+      try {
+        const res = await fetch('/api/clear', { method: 'POST' });
+        const data = await res.json();
+        showToast(res.ok ? '🧹 已清空输入框' : (data.detail || '清空失败'));
+      } catch (e) {
+        showToast('操作失败');
+      }
+    };
+
+    const sendBackspace = async () => {
+      if (navigator.vibrate) navigator.vibrate(25);
+      try {
+        await fetch('/api/remote/backspace', { method: 'POST' });
+        showToast('⌫ 退格');
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
+    const startPair = async (address, name) => {
+      showToast('正在向 Apple TV 发起配对...', 3000);
+      try {
+        const res = await fetch('/api/pair/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address: address.trim(), name })
+        });
+        const data = await res.json();
+        if (res.ok && data.session_id) {
+          pairingSession.value = data.session_id;
+          pinInput.value = '';
+          nextTick(() => lucide.createIcons());
+        } else {
+          showToast('❌ ' + (data.error || data.detail || '发起配对失败'));
+        }
+      } catch (e) {
+        showToast('请求出错');
+      }
+    };
+
+    const startPairManual = () => {
+      if (!manualIp.value.trim()) {
+        showToast('请输入有效的 IP 地址');
+        return;
+      }
+      startPair(manualIp.value.trim(), 'Apple TV');
+    };
+
+    const submitPin = async () => {
+      const pinStr = String(pinInput.value || '').trim();
+      if (!pinStr || !pairingSession.value) return;
+      showToast('正在校验 PIN 码...', 5000);
+      try {
+        const res = await fetch('/api/pair/finish', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: pairingSession.value,
+            pin: pinStr
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+          showToast('🎉 配对成功！');
+          pairingSession.value = null;
+          showDeviceModal.value = false;
+          await loadStatus();
+        } else {
+          showToast('❌ ' + (data.error || data.detail || 'PIN 码错误或已失效'));
+        }
+      } catch (e) {
+        showToast('校验请求失败: ' + e.message);
+      }
+    };
+
+    const selectDevice = async (dev) => {
+      activeDevice.value = dev;
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ default_device_id: dev.identifier })
+      });
+      showDeviceModal.value = false;
+      showToast(`已切换至: ${dev.name}`);
+    };
+
+    const removeDevice = async (devId) => {
+      if (!confirm('确定移除该设备的配对信息吗？')) return;
+      try {
+        await fetch(`/api/devices/${devId}`, { method: 'DELETE' });
+        await loadStatus();
+        showToast('已移除设备');
+      } catch (e) {
+        showToast('删除失败');
+      }
+    };
+
+    onMounted(async () => {
+      await loadStatus();
+      await loadHistory();
+      lucide.createIcons();
+    });
+
+    watch(showDeviceModal, (val) => {
+      nextTick(() => lucide.createIcons());
+    });
+
+    watch(pairingSession, (val) => {
+      nextTick(() => lucide.createIcons());
+    });
+
+    return {
+      inputText, history, devices, activeDevice, sending,
+      showDeviceModal, manualIp, pairingSession, pinInput,
+      toastMsg, chatContainer, inputBox,
+      handleSend, quickResend, copyText, sendClear, sendBackspace,
+      startPair, startPairManual, submitPin, selectDevice, removeDevice
+    };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>
