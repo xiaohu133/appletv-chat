@@ -48,7 +48,11 @@ class SettingsRequest(BaseModel):
 
 @app.get("/", response_class=FileResponse)
 async def index():
-    return FileResponse(str(HTML_FILE))
+    resp = FileResponse(str(HTML_FILE))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 @app.get("/api/status")
 async def get_status():

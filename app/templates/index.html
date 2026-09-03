@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>TV 剪贴板助手 (Apple TV & 安卓电视)</title>
+  <title>TV 剪贴板与遥控助手 (Apple TV & 安卓电视)</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Vue 3 CDN -->
@@ -33,13 +33,24 @@
       background: linear-gradient(135deg, #2563eb, #1d4ed8);
       border-radius: 18px 18px 4px 18px;
     }
+    .remote-btn {
+      background: #1f2937;
+      color: #e5e7eb;
+      transition: all 0.1s ease;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .remote-btn:active {
+      background: #374151;
+      transform: scale(0.92);
+    }
   </style>
 </head>
 <body class="h-[100dvh] flex flex-col overflow-hidden select-none">
 <div id="app" class="h-full flex flex-col max-w-lg mx-auto w-full relative">
 
   <!-- 顶部导航栏 -->
-  <header class="bg-[#111827]/90 backdrop-blur-md border-b border-gray-800 px-4 py-3 flex items-center justify-between z-20 shrink-0">
+  <header class="bg-[#111827]/95 backdrop-blur-md border-b border-gray-800 px-4 py-3 flex items-center justify-between z-20 shrink-0">
     <div class="flex items-center space-x-2">
       <!-- 电视图标 & 状态 -->
       <div class="relative cursor-pointer" @click="showDeviceModal = true">
@@ -52,7 +63,7 @@
       </div>
       <div>
         <div class="flex items-center space-x-1 cursor-pointer" @click="showDeviceModal = true">
-          <span class="font-semibold text-sm tracking-wide text-gray-100 max-w-[150px] truncate">
+          <span class="font-semibold text-sm tracking-wide text-gray-100 max-w-[140px] truncate">
             {{ activeDevice ? activeDevice.name : '未连接电视' }}
           </span>
           <span v-if="activeDevice" class="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300">
@@ -60,18 +71,92 @@
           </span>
           <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-gray-400"></i>
         </div>
-        <div class="text-[11px] text-gray-400">
+        <div class="text-[11px] text-gray-400 font-mono">
           {{ activeDevice ? (activeDevice.address || '已就绪') : '点击添加电视' }}
         </div>
       </div>
     </div>
 
-    <!-- 右侧设置按钮 -->
-    <button @click="showDeviceModal = true" 
-            class="p-2 rounded-xl text-gray-300 hover:text-white bg-gray-800/80 hover:bg-gray-700 active:scale-95 transition">
-      <i data-lucide="settings" class="w-5 h-5"></i>
-    </button>
+    <!-- 右侧功能按钮：遥控器开关 & 设置 -->
+    <div class="flex items-center space-x-2">
+      <button @click="showRemote = !showRemote" 
+              class="px-3 py-1.5 rounded-xl text-xs font-medium flex items-center space-x-1 transition active:scale-95 shadow-sm"
+              :class="showRemote ? 'bg-blue-600 text-white shadow-blue-600/30' : 'bg-gray-800 text-gray-300 hover:text-white'">
+        <i data-lucide="gamepad-2" class="w-4 h-4"></i>
+        <span>遥控器</span>
+      </button>
+
+      <button @click="showDeviceModal = true" 
+              class="p-2 rounded-xl text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 active:scale-95 transition">
+        <i data-lucide="settings" class="w-4 h-4"></i>
+      </button>
+    </div>
   </header>
+
+  <!-- 虚拟遥控器抽屉面板 (可折叠) -->
+  <div v-if="showRemote" class="bg-[#131b2e] border-b border-gray-800 p-4 shrink-0 transition animate-in slide-in-from-top duration-200 shadow-xl z-10">
+    <div class="max-w-xs mx-auto space-y-4">
+      <!-- 遥控器顶部按键行：返回、主页、菜单、静音 -->
+      <div class="flex items-center justify-between px-2">
+        <button @click="sendKey('back')" class="remote-btn w-11 h-11 rounded-2xl flex flex-col items-center justify-center border border-gray-700/60" title="返回">
+          <i data-lucide="undo-2" class="w-4 h-4 text-amber-400"></i>
+          <span class="text-[9px] mt-0.5">返回</span>
+        </button>
+        <button @click="sendKey('home')" class="remote-btn w-11 h-11 rounded-2xl flex flex-col items-center justify-center border border-gray-700/60" title="主页">
+          <i data-lucide="home" class="w-4 h-4 text-blue-400"></i>
+          <span class="text-[9px] mt-0.5">主页</span>
+        </button>
+        <button @click="sendKey('menu')" class="remote-btn w-11 h-11 rounded-2xl flex flex-col items-center justify-center border border-gray-700/60" title="菜单">
+          <i data-lucide="menu" class="w-4 h-4 text-purple-400"></i>
+          <span class="text-[9px] mt-0.5">菜单</span>
+        </button>
+        <button @click="sendKey('mute')" class="remote-btn w-11 h-11 rounded-2xl flex flex-col items-center justify-center border border-gray-700/60" title="静音">
+          <i data-lucide="volume-x" class="w-4 h-4 text-red-400"></i>
+          <span class="text-[9px] mt-0.5">静音</span>
+        </button>
+      </div>
+
+      <!-- 中间十字方向盘 (D-Pad) -->
+      <div class="relative w-44 h-44 mx-auto bg-gray-900 rounded-full border border-gray-700/80 p-1 flex items-center justify-center shadow-inner">
+        <!-- 上 -->
+        <button @click="sendKey('up')" class="absolute top-2 inset-x-0 mx-auto w-12 h-10 rounded-t-xl bg-gray-800/90 active:bg-blue-600 text-gray-300 active:text-white flex items-center justify-center transition">
+          <i data-lucide="chevron-up" class="w-6 h-6"></i>
+        </button>
+        <!-- 下 -->
+        <button @click="sendKey('down')" class="absolute bottom-2 inset-x-0 mx-auto w-12 h-10 rounded-b-xl bg-gray-800/90 active:bg-blue-600 text-gray-300 active:text-white flex items-center justify-center transition">
+          <i data-lucide="chevron-down" class="w-6 h-6"></i>
+        </button>
+        <!-- 左 -->
+        <button @click="sendKey('left')" class="absolute left-2 inset-y-0 my-auto w-10 h-12 rounded-l-xl bg-gray-800/90 active:bg-blue-600 text-gray-300 active:text-white flex items-center justify-center transition">
+          <i data-lucide="chevron-left" class="w-6 h-6"></i>
+        </button>
+        <!-- 右 -->
+        <button @click="sendKey('right')" class="absolute right-2 inset-y-0 my-auto w-10 h-12 rounded-r-xl bg-gray-800/90 active:bg-blue-600 text-gray-300 active:text-white flex items-center justify-center transition">
+          <i data-lucide="chevron-right" class="w-6 h-6"></i>
+        </button>
+        <!-- 中间 OK 键 -->
+        <button @click="sendKey('select')" class="w-16 h-16 rounded-full bg-blue-600 active:bg-blue-500 text-white font-bold text-sm tracking-wider shadow-lg shadow-blue-600/40 flex items-center justify-center transition active:scale-95">
+          OK
+        </button>
+      </div>
+
+      <!-- 音量与播放控制行 -->
+      <div class="flex items-center justify-between px-2 pt-1">
+        <button @click="sendKey('volume_down')" class="remote-btn px-4 py-2 rounded-xl flex items-center space-x-1 text-xs border border-gray-700/60">
+          <i data-lucide="volume-1" class="w-4 h-4"></i>
+          <span>音量 -</span>
+        </button>
+        <button @click="sendKey('play_pause')" class="remote-btn px-4 py-2 rounded-xl flex items-center space-x-1 text-xs border border-gray-700/60">
+          <i data-lucide="play" class="w-4 h-4 text-emerald-400"></i>
+          <span>播放/暂停</span>
+        </button>
+        <button @click="sendKey('volume_up')" class="remote-btn px-4 py-2 rounded-xl flex items-center space-x-1 text-xs border border-gray-700/60">
+          <i data-lucide="volume-2" class="w-4 h-4"></i>
+          <span>音量 +</span>
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- 对话消息气泡流 (聊天界面) -->
   <main ref="chatContainer" class="flex-1 overflow-y-auto p-4 space-y-4 chat-scroll">
@@ -80,9 +165,9 @@
       <div class="w-16 h-16 rounded-2xl bg-gray-800/50 border border-gray-700/60 flex items-center justify-center text-blue-400 mb-4 shadow-inner">
         <i data-lucide="send" class="w-8 h-8"></i>
       </div>
-      <h3 class="text-base font-medium text-gray-200 mb-1">TV 剪贴板助手</h3>
+      <h3 class="text-base font-medium text-gray-200 mb-1">TV 剪贴板与遥控助手</h3>
       <p class="text-xs text-gray-400 leading-relaxed max-w-xs mb-4">
-        像发微信一样在下方输入或粘贴播放源、网址、Token 或账号密码，点击发送即可瞬间同步到电视屏幕。
+        在下方输入或粘贴播放源、网址、Token 或账号密码，点击发送即可瞬间注入到电视屏幕输入框。
       </p>
       <div v-if="!activeDevice" class="mt-2">
         <button @click="showDeviceModal = true" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 active:scale-95 rounded-xl text-xs font-medium text-white shadow-lg shadow-blue-600/30 flex items-center space-x-1.5">
@@ -114,37 +199,37 @@
 
   <!-- 底部操作输入区 -->
   <footer class="bg-[#111827]/95 border-t border-gray-800 p-3 space-y-2.5 z-20 shrink-0">
-    <!-- 快捷按键条 -->
+    <!-- 快捷辅助按键条 -->
     <div class="flex items-center justify-between px-1 text-xs">
       <div class="flex items-center space-x-2">
-        <button @click="sendClear" class="px-2.5 py-1 rounded-lg bg-gray-800/80 hover:bg-gray-700 text-gray-300 active:scale-95 transition flex items-center space-x-1">
+        <button @click="sendClear" class="px-2.5 py-1 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 active:scale-95 transition flex items-center space-x-1">
           <i data-lucide="eraser" class="w-3.5 h-3.5 text-amber-400"></i>
           <span>清空电视输入</span>
         </button>
-        <button @click="sendBackspace" class="px-2.5 py-1 rounded-lg bg-gray-800/80 hover:bg-gray-700 text-gray-300 active:scale-95 transition flex items-center space-x-1">
+        <button @click="sendKey('backspace')" class="px-2.5 py-1 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 active:scale-95 transition flex items-center space-x-1">
           <i data-lucide="delete" class="w-3.5 h-3.5 text-blue-400"></i>
           <span>退格</span>
         </button>
-        <button @click="sendEnter" class="px-2.5 py-1 rounded-lg bg-gray-800/80 hover:bg-gray-700 text-gray-300 active:scale-95 transition flex items-center space-x-1">
+        <button @click="sendKey('enter')" class="px-2.5 py-1 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 active:scale-95 transition flex items-center space-x-1">
           <i data-lucide="corner-down-left" class="w-3.5 h-3.5 text-emerald-400"></i>
-          <span>回车确认</span>
+          <span>回车</span>
         </button>
       </div>
 
       <!-- 自动回车开关 -->
       <label class="flex items-center space-x-1.5 cursor-pointer text-gray-400 hover:text-gray-300">
         <input type="checkbox" v-model="autoEnter" class="rounded bg-gray-800 border-gray-700 text-blue-600 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5">
-        <span class="text-[11px]">发送后自动回车</span>
+        <span class="text-[11px]">发送后回车</span>
       </label>
     </div>
 
-    <!-- 文本框与发送按钮 -->
+    <!-- 文本输入框与发送按钮 -->
     <div class="flex items-end space-x-2">
       <div class="flex-1 bg-gray-800/90 border border-gray-700 rounded-2xl px-3 py-2 focus-within:border-blue-500 transition shadow-inner flex items-center">
         <textarea ref="inputBox"
                   v-model="inputText"
                   @keydown.enter.exact.prevent="handleSend"
-                  placeholder="在此输入或长按粘贴文本..." 
+                  placeholder="在此输入文本或长按粘贴链接..." 
                   rows="1"
                   class="w-full bg-transparent border-0 outline-none text-sm text-gray-100 placeholder-gray-500 resize-none max-h-28 overflow-y-auto"></textarea>
       </div>
@@ -161,7 +246,6 @@
   <!-- 设备管理与设置弹窗 -->
   <div v-if="showDeviceModal" class="fixed inset-0 bg-black/80 z-40 flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-sm">
     <div class="bg-[#111827] border-t sm:border border-gray-800 rounded-t-3xl sm:rounded-2xl w-full max-w-md max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-200">
-      <!-- 弹窗标题 -->
       <div class="p-4 border-b border-gray-800 flex items-center justify-between">
         <div class="flex items-center space-x-2">
           <i data-lucide="tv" class="w-5 h-5 text-blue-400"></i>
@@ -173,7 +257,7 @@
       </div>
 
       <div class="p-4 space-y-4 overflow-y-auto">
-        <!-- 当前已连接设备列表 -->
+        <!-- 设备列表 -->
         <div class="space-y-2">
           <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center justify-between">
             <span>已保存的电视列表</span>
@@ -210,51 +294,36 @@
           </div>
         </div>
 
-        <!-- 新增设备选项卡 -->
+        <!-- 添加新电视选项卡 -->
         <div class="border-t border-gray-800 pt-4 space-y-3">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">➕ 添加新电视设备</span>
+            <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">➕ 添加新电视</span>
           </div>
 
-          <!-- 选项卡切换: Apple TV vs 安卓电视 -->
           <div class="grid grid-cols-2 gap-2 p-1 bg-gray-800/80 rounded-xl">
-            <button @click="addTab = 'appletv'"
-                    class="py-1.5 text-xs font-medium rounded-lg transition flex items-center justify-center space-x-1"
-                    :class="addTab === 'appletv' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'">
-              <span>🍎 Apple TV</span>
-            </button>
             <button @click="addTab = 'androidtv'"
                     class="py-1.5 text-xs font-medium rounded-lg transition flex items-center justify-center space-x-1"
                     :class="addTab === 'androidtv' ? 'bg-emerald-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'">
               <span>🤖 安卓电视 (ADB)</span>
             </button>
+            <button @click="addTab = 'appletv'"
+                    class="py-1.5 text-xs font-medium rounded-lg transition flex items-center justify-center space-x-1"
+                    :class="addTab === 'appletv' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'">
+              <span>🍎 Apple TV</span>
+            </button>
           </div>
 
-          <!-- Tab 1: Apple TV 配对 -->
-          <div v-if="addTab === 'appletv'" class="space-y-2.5">
-            <div class="flex space-x-2">
-              <input v-model="manualIp" type="text" placeholder="Apple TV IP (如 192.168.1.50)" 
-                     class="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-100 outline-none focus:border-blue-500">
-              <button @click="startPairManual" class="px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded-xl text-xs font-medium text-white shrink-0">
-                发起配对
-              </button>
-            </div>
-            <p class="text-[11px] text-gray-400 leading-relaxed">
-              * 提示：点击发起配对后，Apple TV 屏幕上会弹出一个 4 位数验证码，输入即可完成终身免密配对。
-            </p>
-          </div>
-
-          <!-- Tab 2: 安卓电视连接 -->
+          <!-- 安卓电视 -->
           <div v-if="addTab === 'androidtv'" class="space-y-2.5">
             <div class="space-y-2">
               <div class="flex space-x-2">
-                <input v-model="androidIp" type="text" placeholder="安卓电视 IP (如 192.168.1.60)" 
+                <input v-model="androidIp" type="text" placeholder="安卓电视 IP (如 192.168.100.104)" 
                        class="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-100 outline-none focus:border-emerald-500 font-mono">
                 <input v-model.number="androidPort" type="number" placeholder="5555" 
                        class="w-16 bg-gray-800 border border-gray-700 rounded-xl px-2 py-2 text-xs text-gray-100 outline-none focus:border-emerald-500 font-mono text-center">
               </div>
               <div class="flex space-x-2">
-                <input v-model="androidName" type="text" placeholder="设备备注 (如: 客厅小米电视)" 
+                <input v-model="androidName" type="text" placeholder="设备备注 (如: 客厅索尼电视)" 
                        class="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-100 outline-none focus:border-emerald-500">
                 <button @click="connectAndroid" :disabled="connectingAndroid" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-xs font-medium text-white shrink-0 disabled:opacity-50 flex items-center space-x-1">
                   <i v-if="connectingAndroid" data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i>
@@ -264,11 +333,20 @@
             </div>
 
             <div class="p-3 bg-gray-800/40 rounded-xl border border-gray-800 text-[11px] text-gray-400 space-y-1 leading-relaxed">
-              <div class="font-medium text-gray-300">💡 安卓电视开启连接指引：</div>
-              <div>1. 确保电视与手机连在同一家里的 WiFi 局域网下；</div>
-              <div>2. 在电视【设置 ➔ 关于 ➔ 版本号】连续按 5 次确认键开启开发者模式；</div>
-              <div>3. 进入【设置 ➔ 开发者选项】，打开【网络调试 / USB 调试】（端口 5555）；</div>
-              <div>4. 点击上方【连接电视】，若电视屏幕弹出“允许调试吗？”，勾选始终允许并点击【确定】即可！</div>
+              <div class="font-medium text-gray-300">💡 提示：</div>
+              <div>1. 确保电视开启了【网络调试】（端口 5555）；</div>
+              <div>2. 首次连接若电视屏幕弹出“允许调试吗？”，勾选始终允许并点击【确定】。</div>
+            </div>
+          </div>
+
+          <!-- Apple TV -->
+          <div v-if="addTab === 'appletv'" class="space-y-2.5">
+            <div class="flex space-x-2">
+              <input v-model="manualIp" type="text" placeholder="Apple TV IP (如 192.168.100.171)" 
+                     class="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-100 outline-none focus:border-blue-500">
+              <button @click="startPairManual" class="px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded-xl text-xs font-medium text-white shrink-0">
+                发起配对
+              </button>
             </div>
           </div>
         </div>
@@ -276,7 +354,7 @@
     </div>
   </div>
 
-  <!-- Apple TV PIN 码输入弹窗 -->
+  <!-- Apple TV PIN 码弹窗 -->
   <div v-if="pairingSession" class="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4 backdrop-blur-md">
     <div class="bg-[#111827] border border-blue-500/60 rounded-2xl w-full max-w-sm p-6 space-y-4 shadow-2xl text-center">
       <div class="w-12 h-12 rounded-full bg-blue-600/20 text-blue-400 mx-auto flex items-center justify-center">
@@ -325,7 +403,8 @@ createApp({
     const sending = ref(false);
     const autoEnter = ref(false);
     const showDeviceModal = ref(false);
-    const addTab = ref('androidtv'); // default to androidtv or appletv
+    const showRemote = ref(false);
+    const addTab = ref('androidtv');
     const manualIp = ref('');
     const pairingSession = ref(null);
     const pinInput = ref('');
@@ -333,14 +412,14 @@ createApp({
     // Android TV form
     const androidIp = ref('');
     const androidPort = ref(5555);
-    const androidName = ref('安卓电视');
+    const androidName = ref('索尼电视');
     const connectingAndroid = ref(false);
 
     const toastMsg = ref('');
     const chatContainer = ref(null);
     const inputBox = ref(null);
 
-    const showToast = (msg, duration = 3000) => {
+    const showToast = (msg, duration = 2500) => {
       toastMsg.value = msg;
       nextTick(() => lucide.createIcons());
       setTimeout(() => { toastMsg.value = ''; }, duration);
@@ -357,7 +436,7 @@ createApp({
 
     const loadStatus = async () => {
       try {
-        const res = await fetch('/api/status');
+        const res = await fetch('/api/status?_t=' + Date.now());
         const data = await res.json();
         devices.value = data.devices || [];
         if (data.settings) {
@@ -375,12 +454,16 @@ createApp({
 
     const loadHistory = async () => {
       try {
-        const res = await fetch('/api/history');
+        const res = await fetch('/api/history?_t=' + Date.now());
         history.value = await res.json();
         scrollToBottom();
       } catch (e) {
         console.error(e);
       }
+    };
+
+    const getActiveDevId = () => {
+      return activeDevice.value ? (activeDevice.value.id || activeDevice.value.identifier) : null;
     };
 
     const handleSend = async () => {
@@ -389,7 +472,7 @@ createApp({
 
       sending.value = true;
       try {
-        const devId = activeDevice.value ? (activeDevice.value.id || activeDevice.value.identifier) : null;
+        const devId = getActiveDevId();
         const res = await fetch('/api/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -434,37 +517,31 @@ createApp({
       }
     };
 
+    const sendKey = async (action) => {
+      if (navigator.vibrate) navigator.vibrate(15);
+      const devId = getActiveDevId();
+      try {
+        const url = `/api/remote/${encodeURIComponent(action)}` + (devId ? `?device_id=${encodeURIComponent(devId)}` : '');
+        const res = await fetch(url, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) {
+          showToast('❌ ' + (data.detail || data.error || '按键失败'));
+        }
+      } catch (e) {
+        console.error('Remote key error:', e);
+      }
+    };
+
     const sendClear = async () => {
       if (navigator.vibrate) navigator.vibrate(20);
+      const devId = getActiveDevId();
       try {
-        const devId = activeDevice.value ? (activeDevice.value.id || activeDevice.value.identifier) : null;
-        const res = await fetch('/api/clear' + (devId ? `?device_id=${encodeURIComponent(devId)}` : ''), { method: 'POST' });
+        const url = `/api/clear` + (devId ? `?device_id=${encodeURIComponent(devId)}` : '');
+        const res = await fetch(url, { method: 'POST' });
         const data = await res.json();
         showToast(res.ok ? '🧹 已清空电视输入' : (data.detail || '清空失败'));
       } catch (e) {
         showToast('操作失败');
-      }
-    };
-
-    const sendBackspace = async () => {
-      if (navigator.vibrate) navigator.vibrate(25);
-      try {
-        const devId = activeDevice.value ? (activeDevice.value.id || activeDevice.value.identifier) : null;
-        await fetch(`/api/remote/backspace` + (devId ? `?device_id=${encodeURIComponent(devId)}` : ''), { method: 'POST' });
-        showToast('⌫ 退格');
-      } catch (e) {
-        console.error(e);
-      }
-    };
-
-    const sendEnter = async () => {
-      if (navigator.vibrate) navigator.vibrate(25);
-      try {
-        const devId = activeDevice.value ? (activeDevice.value.id || activeDevice.value.identifier) : null;
-        await fetch(`/api/remote/enter` + (devId ? `?device_id=${encodeURIComponent(devId)}` : ''), { method: 'POST' });
-        showToast('↩ 回车确认');
-      } catch (e) {
-        console.error(e);
       }
     };
 
@@ -565,7 +642,7 @@ createApp({
         body: JSON.stringify({ default_device_id: devId })
       });
       showDeviceModal.value = false;
-      showToast(`已切换至: ${dev.name}`);
+      showToast(`已选用: ${dev.name}`);
     };
 
     const removeDevice = async (devId) => {
@@ -593,20 +670,16 @@ createApp({
       lucide.createIcons();
     });
 
-    watch(showDeviceModal, (val) => {
-      nextTick(() => lucide.createIcons());
-    });
-
-    watch(pairingSession, (val) => {
-      nextTick(() => lucide.createIcons());
-    });
+    watch(showDeviceModal, () => nextTick(() => lucide.createIcons()));
+    watch(showRemote, () => nextTick(() => lucide.createIcons()));
+    watch(pairingSession, () => nextTick(() => lucide.createIcons()));
 
     return {
       inputText, history, devices, activeDevice, sending, autoEnter,
-      showDeviceModal, addTab, manualIp, pairingSession, pinInput,
+      showDeviceModal, showRemote, addTab, manualIp, pairingSession, pinInput,
       androidIp, androidPort, androidName, connectingAndroid,
       toastMsg, chatContainer, inputBox,
-      handleSend, quickResend, copyText, sendClear, sendBackspace, sendEnter,
+      handleSend, quickResend, copyText, sendKey, sendClear,
       startPair, startPairManual, submitPin, connectAndroid, selectDevice, removeDevice
     };
   }
