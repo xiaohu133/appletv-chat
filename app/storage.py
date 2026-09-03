@@ -37,6 +37,9 @@ def get_devices() -> List[Dict[str, Any]]:
         name = d.get("name", "")
         if not name or "\ufffd" in name:
             d["name"] = "索尼电视" if d.get("type") == "androidtv" else "Apple TV"
+        dev_id = d.get("id") or d.get("identifier") or ""
+        d["id"] = dev_id
+        d["identifier"] = dev_id
     return devs
 
 def save_devices(devices: List[Dict[str, Any]]):

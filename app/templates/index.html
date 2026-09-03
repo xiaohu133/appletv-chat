@@ -83,21 +83,21 @@
     </div>
   </header>
 
-  <!-- 顶部设备一键直切栏 (核心！无需进弹窗，一秒切换) -->
+  <!-- 顶部设备一键直切栏 (即时响应，零延迟) -->
   <div class="bg-[#0e1424] px-3 py-2 border-b border-gray-800/80 flex items-center space-x-2 overflow-x-auto shrink-0">
-    <button v-for="dev in devices" :key="dev.id || dev.identifier"
+    <button v-for="dev in devices" :key="dev.id"
             @click="selectDevice(dev)"
             class="flex-1 min-w-[120px] py-1.5 px-3 rounded-xl text-xs font-medium flex items-center justify-center space-x-1.5 transition-all active:scale-95 border"
-            :class="isCurrentDevice(dev) 
+            :class="dev.id === currentDeviceId 
                     ? (dev.type === 'androidtv' ? 'bg-emerald-600/25 border-emerald-500 text-emerald-300 font-bold shadow-md shadow-emerald-950/40 ring-1 ring-emerald-500/50' : 'bg-blue-600/25 border-blue-500 text-blue-300 font-bold shadow-md shadow-blue-950/40 ring-1 ring-blue-500/50')
                     : 'bg-gray-800/50 border-gray-700/60 text-gray-400 hover:text-gray-200 hover:bg-gray-800'">
       <span class="text-sm">{{ dev.type === 'androidtv' ? '🤖' : '🍎' }}</span>
       <span class="truncate">{{ dev.name }}</span>
-      <span v-if="isCurrentDevice(dev)" class="w-1.5 h-1.5 rounded-full"
+      <span v-if="dev.id === currentDeviceId" class="w-1.5 h-1.5 rounded-full"
             :class="dev.type === 'androidtv' ? 'bg-emerald-400' : 'bg-blue-400'"></span>
     </button>
 
-    <!-- 快捷添加按钮 -->
+    <!-- 配对新电视按钮 -->
     <button @click="showDeviceModal = true" 
             class="px-2.5 py-1.5 rounded-xl text-xs bg-gray-800/60 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white flex items-center space-x-1 shrink-0 active:scale-95 transition">
       <i data-lucide="plus" class="w-3.5 h-3.5"></i>
@@ -268,10 +268,10 @@
             点击直接选用电视
           </div>
 
-          <div v-for="dev in devices" :key="dev.id || dev.identifier" 
+          <div v-for="dev in devices" :key="dev.id" 
                @click="selectDevice(dev)"
                class="p-3 rounded-xl border flex items-center justify-between cursor-pointer transition active:scale-[0.98]"
-               :class="isCurrentDevice(dev) ? 'bg-blue-600/15 border-blue-500/60 text-white' : 'bg-gray-800/40 border-gray-800 hover:bg-gray-800/80 text-gray-300'">
+               :class="dev.id === currentDeviceId ? 'bg-blue-600/15 border-blue-500/60 text-white' : 'bg-gray-800/40 border-gray-800 hover:bg-gray-800/80 text-gray-300'">
             <div class="flex items-center space-x-3">
               <span class="text-xl">{{ dev.type === 'androidtv' ? '🤖' : '🍎' }}</span>
               <div>
@@ -286,9 +286,9 @@
             </div>
 
             <div class="flex items-center space-x-2">
-              <span v-if="isCurrentDevice(dev)" class="text-xs text-blue-400 font-semibold px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/30">当前控制中</span>
+              <span v-if="dev.id === currentDeviceId" class="text-xs text-blue-400 font-semibold px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/30">当前控制中</span>
               <span v-else class="text-xs text-gray-400">点击选用</span>
-              <button @click.stop="removeDevice(dev.id || dev.identifier)" class="p-1.5 text-gray-400 hover:text-red-400" title="删除设备">
+              <button @click.stop="removeDevice(dev.id)" class="p-1.5 text-gray-400 hover:text-red-400" title="删除设备">
                 <i data-lucide="trash-2" class="w-4 h-4"></i>
               </button>
             </div>
@@ -301,7 +301,6 @@
             ➕ 绑定新电视设备
           </div>
 
-          <!-- 选项卡：新增安卓电视 / 新增 Apple TV -->
           <div class="grid grid-cols-2 gap-2 p-1 bg-gray-800/80 rounded-xl">
             <button @click="addTab = 'androidtv'"
                     class="py-1.5 text-xs font-medium rounded-lg transition flex items-center justify-center space-x-1"
@@ -394,14 +393,21 @@
 </div>
 
 <script>
-const { createApp, ref, onMounted, nextTick, watch } = Vue;
+const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
 
 createApp({
   setup() {
     const inputText = ref('');
     const history = ref([]);
     const devices = ref([]);
-    const activeDevice = ref(null);
+    const currentDeviceId = ref('');
+    
+    // computed activeDevice: 纯响应式计算属性，随 currentDeviceId 改变 100% 即时同步！
+    const activeDevice = computed(() => {
+      if (!devices.value || devices.value.length === 0) return null;
+      return devices.value.find(d => d.id === currentDeviceId.value) || devices.value[0];
+    });
+
     const sending = ref(false);
     const autoEnter = ref(false);
     const showDeviceModal = ref(false);
@@ -436,13 +442,6 @@ createApp({
       });
     };
 
-    const isCurrentDevice = (dev) => {
-      if (!activeDevice.value || !dev) return false;
-      const curId = activeDevice.value.id || activeDevice.value.identifier;
-      const targetId = dev.id || dev.identifier;
-      return curId === targetId;
-    };
-
     const loadStatus = async () => {
       try {
         const res = await fetch('/api/status?_t=' + Date.now());
@@ -450,10 +449,13 @@ createApp({
         devices.value = data.devices || [];
         if (data.settings) {
           autoEnter.value = !!data.settings.auto_enter;
-          if (data.settings.default_device_id) {
-            activeDevice.value = devices.value.find(d => (d.id || d.identifier) === data.settings.default_device_id) || devices.value[0];
-          } else if (devices.value.length > 0) {
-            activeDevice.value = devices.value[0];
+          // 若当前尚未选定，优先使用后台默认设备
+          if (!currentDeviceId.value) {
+            if (data.settings.default_device_id && devices.value.some(d => d.id === data.settings.default_device_id)) {
+              currentDeviceId.value = data.settings.default_device_id;
+            } else if (devices.value.length > 0) {
+              currentDeviceId.value = devices.value[0].id;
+            }
           }
         }
       } catch (e) {
@@ -472,22 +474,22 @@ createApp({
     };
 
     const getActiveDevId = () => {
-      return activeDevice.value ? (activeDevice.value.id || activeDevice.value.identifier) : null;
+      return currentDeviceId.value || (activeDevice.value ? activeDevice.value.id : null);
     };
 
-    // 毫秒级即时切换设备（零阻塞）
+    // 毫秒级即时切换设备（零阻塞，零延迟，无需刷新！）
     const selectDevice = (dev) => {
-      activeDevice.value = dev;
+      if (!dev || !dev.id) return;
+      currentDeviceId.value = dev.id;
       showDeviceModal.value = false;
-      pairingSession.value = null; // 取消任何残留的配对弹窗
+      pairingSession.value = null;
       showToast(`已切换控制: ${dev.name}`);
       
-      const devId = dev.id || dev.identifier;
-      // 异步持久化配置，不阻塞界面
+      // 异步后台持久化，绝不影响前端即时切换
       fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ default_device_id: devId })
+        body: JSON.stringify({ default_device_id: dev.id })
       }).catch(e => console.error('Save settings error:', e));
     };
 
@@ -648,6 +650,9 @@ createApp({
           showToast('🎉 ' + data.message, 4000);
           showDeviceModal.value = false;
           await loadStatus();
+          if (data.device && data.device.id) {
+            currentDeviceId.value = data.device.id;
+          }
         } else {
           showToast('❌ ' + (data.detail || data.error || '连接失败'));
         }
@@ -687,13 +692,14 @@ createApp({
     watch(showRemote, () => nextTick(() => lucide.createIcons()));
     watch(pairingSession, () => nextTick(() => lucide.createIcons()));
     watch(devices, () => nextTick(() => lucide.createIcons()));
+    watch(currentDeviceId, () => nextTick(() => lucide.createIcons()));
 
     return {
-      inputText, history, devices, activeDevice, sending, autoEnter,
+      inputText, history, devices, currentDeviceId, activeDevice, sending, autoEnter,
       showDeviceModal, showRemote, addTab, manualIp, pairingSession, pinInput,
       androidIp, androidPort, androidName, connectingAndroid,
       toastMsg, chatContainer, inputBox,
-      isCurrentDevice, selectDevice, handleSend, quickResend, copyText, sendKey, sendClear,
+      selectDevice, handleSend, quickResend, copyText, sendKey, sendClear,
       startPair, startPairManual, submitPin, connectAndroid, removeDevice
     };
   }
