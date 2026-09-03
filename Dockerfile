@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libffi-dev \
     libssl-dev \
+    adb \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -14,6 +15,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ ./app/
 
 ENV DATA_DIR=/app/data
+ENV HOME=/app/data
+ENV ADB_VENDOR_KEYS=/app/data/.android
 ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8097

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Apple TV 剪贴板助手</title>
+  <title>TV 剪贴板助手 (Apple TV & 安卓电视)</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Vue 3 CDN -->
@@ -42,9 +42,10 @@
   <header class="bg-[#111827]/90 backdrop-blur-md border-b border-gray-800 px-4 py-3 flex items-center justify-between z-20 shrink-0">
     <div class="flex items-center space-x-2">
       <!-- 电视图标 & 状态 -->
-      <div class="relative">
+      <div class="relative cursor-pointer" @click="showDeviceModal = true">
         <div class="w-9 h-9 rounded-full bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
-          <i data-lucide="tv" class="w-5 h-5"></i>
+          <i v-if="activeDevice && activeDevice.type === 'androidtv'" data-lucide="bot" class="w-5 h-5 text-emerald-400"></i>
+          <i v-else data-lucide="tv" class="w-5 h-5"></i>
         </div>
         <span class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full ring-2 ring-[#111827]"
               :class="activeDevice ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-amber-500'"></span>
@@ -52,12 +53,15 @@
       <div>
         <div class="flex items-center space-x-1 cursor-pointer" @click="showDeviceModal = true">
           <span class="font-semibold text-sm tracking-wide text-gray-100 max-w-[150px] truncate">
-            {{ activeDevice ? activeDevice.name : '未连接设备' }}
+            {{ activeDevice ? activeDevice.name : '未连接电视' }}
+          </span>
+          <span v-if="activeDevice" class="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300">
+            {{ activeDevice.type === 'androidtv' ? '🤖 安卓' : '🍎 苹果' }}
           </span>
           <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-gray-400"></i>
         </div>
         <div class="text-[11px] text-gray-400">
-          {{ activeDevice ? (activeDevice.address || '已连接就绪') : '点击配对' }}
+          {{ activeDevice ? (activeDevice.address || '已就绪') : '点击添加电视' }}
         </div>
       </div>
     </div>
@@ -76,14 +80,14 @@
       <div class="w-16 h-16 rounded-2xl bg-gray-800/50 border border-gray-700/60 flex items-center justify-center text-blue-400 mb-4 shadow-inner">
         <i data-lucide="send" class="w-8 h-8"></i>
       </div>
-      <h3 class="text-base font-medium text-gray-200 mb-1">Apple TV 剪贴板助手</h3>
+      <h3 class="text-base font-medium text-gray-200 mb-1">TV 剪贴板助手</h3>
       <p class="text-xs text-gray-400 leading-relaxed max-w-xs mb-4">
-        在下方输入框中粘贴播放源、网址、Token 或密码，点击发送即可瞬间同步到 Apple TV 屏幕。
+        像发微信一样在下方输入或粘贴播放源、网址、Token 或账号密码，点击发送即可瞬间同步到电视屏幕。
       </p>
       <div v-if="!activeDevice" class="mt-2">
         <button @click="showDeviceModal = true" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 active:scale-95 rounded-xl text-xs font-medium text-white shadow-lg shadow-blue-600/30 flex items-center space-x-1.5">
           <i data-lucide="plus" class="w-4 h-4"></i>
-          <span>首次配对 Apple TV</span>
+          <span>添加电视设备 (Apple TV / 安卓电视)</span>
         </button>
       </div>
     </div>
@@ -95,6 +99,7 @@
       </div>
       <div class="flex items-center space-x-2 text-[10px] text-gray-400 px-1">
         <span>{{ item.time }}</span>
+        <span v-if="item.device_name" class="text-gray-400">({{ item.device_name }})</span>
         <span v-if="item.success" class="text-emerald-400">● 成功</span>
         <span v-else class="text-red-400">● 失败</span>
         <button @click="quickResend(item.text)" class="hover:text-blue-400 active:scale-90 transition p-0.5" title="重新发送">
@@ -107,103 +112,171 @@
     </div>
   </main>
 
-  <!-- 极简功能操作栏 (只保留 清空电视输入 和 退格键) -->
-  <div class="px-3 pt-2 bg-[#111827] border-t border-gray-800/80 flex items-center space-x-2">
-    <!-- 清空电视输入 -->
-    <button @click="sendClear" class="flex-1 flex items-center justify-center space-x-1.5 py-2 px-3 rounded-xl bg-gray-800/90 hover:bg-gray-700/90 text-amber-400 text-xs font-medium active:scale-95 transition border border-gray-700/60">
-      <i data-lucide="eraser" class="w-4 h-4"></i>
-      <span>清空电视输入</span>
-    </button>
+  <!-- 底部操作输入区 -->
+  <footer class="bg-[#111827]/95 border-t border-gray-800 p-3 space-y-2.5 z-20 shrink-0">
+    <!-- 快捷按键条 -->
+    <div class="flex items-center justify-between px-1 text-xs">
+      <div class="flex items-center space-x-2">
+        <button @click="sendClear" class="px-2.5 py-1 rounded-lg bg-gray-800/80 hover:bg-gray-700 text-gray-300 active:scale-95 transition flex items-center space-x-1">
+          <i data-lucide="eraser" class="w-3.5 h-3.5 text-amber-400"></i>
+          <span>清空电视输入</span>
+        </button>
+        <button @click="sendBackspace" class="px-2.5 py-1 rounded-lg bg-gray-800/80 hover:bg-gray-700 text-gray-300 active:scale-95 transition flex items-center space-x-1">
+          <i data-lucide="delete" class="w-3.5 h-3.5 text-blue-400"></i>
+          <span>退格</span>
+        </button>
+        <button @click="sendEnter" class="px-2.5 py-1 rounded-lg bg-gray-800/80 hover:bg-gray-700 text-gray-300 active:scale-95 transition flex items-center space-x-1">
+          <i data-lucide="corner-down-left" class="w-3.5 h-3.5 text-emerald-400"></i>
+          <span>回车确认</span>
+        </button>
+      </div>
 
-    <!-- 退格键 -->
-    <button @click="sendBackspace" class="flex-1 flex items-center justify-center space-x-1.5 py-2 px-3 rounded-xl bg-gray-800/90 hover:bg-gray-700/90 text-gray-200 text-xs font-medium active:scale-95 transition border border-gray-700/60">
-      <i data-lucide="delete" class="w-4 h-4 text-rose-400"></i>
-      <span>退格键 (Backspace)</span>
-    </button>
-  </div>
-
-  <!-- 底部聊天式输入框 -->
-  <footer class="bg-[#111827] px-3 pb-4 pt-2 border-t border-gray-800/60 flex items-end space-x-2 z-20">
-    <div class="flex-1 bg-gray-800/90 rounded-2xl border border-gray-700/80 focus-within:border-blue-500 transition px-3.5 py-2 flex items-center">
-      <textarea ref="inputBox" 
-                v-model="inputText" 
-                @keydown.enter.exact.prevent="handleSend"
-                rows="1"
-                placeholder="输入文本 / 粘贴长链接..." 
-                class="w-full bg-transparent text-gray-100 text-[15px] outline-none resize-none max-h-28 leading-5 font-mono"></textarea>
-      <button v-if="inputText" @click="inputText = ''" class="text-gray-400 hover:text-gray-200 ml-1 p-0.5">
-        <i data-lucide="x" class="w-4 h-4"></i>
-      </button>
+      <!-- 自动回车开关 -->
+      <label class="flex items-center space-x-1.5 cursor-pointer text-gray-400 hover:text-gray-300">
+        <input type="checkbox" v-model="autoEnter" class="rounded bg-gray-800 border-gray-700 text-blue-600 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5">
+        <span class="text-[11px]">发送后自动回车</span>
+      </label>
     </div>
 
-    <!-- 发送按钮 -->
-    <button @click="handleSend" 
-            :disabled="!inputText.trim() || sending"
-            class="w-11 h-11 rounded-2xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-white flex items-center justify-center shrink-0 active:scale-90 transition shadow-lg shadow-blue-600/30">
-      <i v-if="!sending" data-lucide="arrow-up" class="w-6 h-6"></i>
-      <i v-else data-lucide="loader-2" class="w-5 h-5 animate-spin"></i>
-    </button>
+    <!-- 文本框与发送按钮 -->
+    <div class="flex items-end space-x-2">
+      <div class="flex-1 bg-gray-800/90 border border-gray-700 rounded-2xl px-3 py-2 focus-within:border-blue-500 transition shadow-inner flex items-center">
+        <textarea ref="inputBox"
+                  v-model="inputText"
+                  @keydown.enter.exact.prevent="handleSend"
+                  placeholder="在此输入或长按粘贴文本..." 
+                  rows="1"
+                  class="w-full bg-transparent border-0 outline-none text-sm text-gray-100 placeholder-gray-500 resize-none max-h-28 overflow-y-auto"></textarea>
+      </div>
+
+      <button @click="handleSend" 
+              :disabled="!inputText.trim() || sending"
+              class="w-10 h-10 rounded-2xl bg-blue-600 hover:bg-blue-500 active:scale-95 disabled:opacity-40 disabled:pointer-events-none transition flex items-center justify-center text-white shadow-lg shadow-blue-600/30 shrink-0">
+        <i v-if="!sending" data-lucide="send" class="w-5 h-5"></i>
+        <i v-else data-lucide="loader-2" class="w-5 h-5 animate-spin"></i>
+      </button>
+    </div>
   </footer>
 
-  <!-- 设备管理与配对 Modal -->
-  <div v-if="showDeviceModal" class="fixed inset-0 bg-black/75 z-40 flex items-center justify-center p-4 backdrop-blur-sm">
-    <div class="bg-[#111827] border border-gray-700 rounded-2xl w-full max-w-md max-h-[85vh] flex flex-col overflow-hidden shadow-2xl">
-      <div class="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+  <!-- 设备管理与设置弹窗 -->
+  <div v-if="showDeviceModal" class="fixed inset-0 bg-black/80 z-40 flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-sm">
+    <div class="bg-[#111827] border-t sm:border border-gray-800 rounded-t-3xl sm:rounded-2xl w-full max-w-md max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-200">
+      <!-- 弹窗标题 -->
+      <div class="p-4 border-b border-gray-800 flex items-center justify-between">
         <div class="flex items-center space-x-2">
-          <i data-lucide="tv-2" class="w-5 h-5 text-blue-400"></i>
-          <h3 class="font-semibold text-gray-100">Apple TV 设备管理</h3>
+          <i data-lucide="tv" class="w-5 h-5 text-blue-400"></i>
+          <h3 class="font-semibold text-gray-100 text-sm">电视设备管理</h3>
         </div>
-        <button @click="showDeviceModal = false" class="text-gray-400 hover:text-white">
+        <button @click="showDeviceModal = false" class="p-1 rounded-lg text-gray-400 hover:text-white">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
 
-      <div class="p-5 overflow-y-auto space-y-5 text-sm">
-        <div>
-          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">已配对设备</div>
-          <div v-if="devices.length === 0" class="text-xs text-gray-400 py-2">暂无配对设备，请在下方输入 IP 配对</div>
-          <div v-else class="space-y-2">
-            <div v-for="dev in devices" :key="dev.identifier" 
-                 @click="selectDevice(dev)"
-                 class="p-3 rounded-xl border flex items-center justify-between cursor-pointer transition"
-                 :class="activeDevice && activeDevice.identifier === dev.identifier ? 'bg-blue-950/40 border-blue-500/60' : 'bg-gray-800/60 border-gray-700 hover:border-gray-600'">
-              <div class="flex items-center space-x-3">
-                <div class="w-8 h-8 rounded-lg bg-blue-600/20 text-blue-400 flex items-center justify-center">
-                  <i data-lucide="tv" class="w-4 h-4"></i>
+      <div class="p-4 space-y-4 overflow-y-auto">
+        <!-- 当前已连接设备列表 -->
+        <div class="space-y-2">
+          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center justify-between">
+            <span>已保存的电视列表</span>
+            <span class="text-[11px] font-normal text-gray-400">{{ devices.length }} 台设备</span>
+          </div>
+
+          <div v-if="devices.length === 0" class="text-center py-4 text-xs text-gray-400 bg-gray-800/30 rounded-xl border border-gray-800/60">
+            暂无已配对设备，请在下方添加
+          </div>
+
+          <div v-for="dev in devices" :key="dev.id || dev.identifier" 
+               @click="selectDevice(dev)"
+               class="p-3 rounded-xl border flex items-center justify-between cursor-pointer transition"
+               :class="activeDevice && (activeDevice.id === dev.id || activeDevice.identifier === dev.identifier) ? 'bg-blue-600/10 border-blue-500/50 text-white' : 'bg-gray-800/40 border-gray-800 hover:bg-gray-800/80 text-gray-300'">
+            <div class="flex items-center space-x-3">
+              <span class="text-lg">{{ dev.type === 'androidtv' ? '🤖' : '🍎' }}</span>
+              <div>
+                <div class="font-medium text-xs flex items-center space-x-2">
+                  <span>{{ dev.name }}</span>
+                  <span class="text-[10px] px-1.5 py-0.2 rounded bg-gray-800 border border-gray-700 text-gray-400">
+                    {{ dev.type === 'androidtv' ? 'Android TV' : 'Apple TV' }}
+                  </span>
                 </div>
-                <div>
-                  <div class="font-medium text-gray-200">{{ dev.name }}</div>
-                  <div class="text-xs text-gray-400">{{ dev.address }}</div>
-                </div>
+                <div class="text-[11px] text-gray-400 font-mono">{{ dev.address || '已配对' }}</div>
               </div>
-              <div class="flex items-center space-x-2">
-                <span v-if="activeDevice && activeDevice.identifier === dev.identifier" class="text-xs text-blue-400 font-medium">当前选用</span>
-                <button @click.stop="removeDevice(dev.id || dev.identifier)" class="p-1.5 text-gray-400 hover:text-red-400">
-                  <i data-lucide="trash-2" class="w-4 h-4"></i>
-                </button>
-              </div>
+            </div>
+
+            <div class="flex items-center space-x-2">
+              <span v-if="activeDevice && (activeDevice.id === dev.id || activeDevice.identifier === dev.identifier)" class="text-xs text-blue-400 font-medium">当前选用</span>
+              <button @click.stop="removeDevice(dev.id || dev.identifier)" class="p-1.5 text-gray-400 hover:text-red-400">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
             </div>
           </div>
         </div>
 
+        <!-- 新增设备选项卡 -->
         <div class="border-t border-gray-800 pt-4 space-y-3">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">新增直连配对</span>
+            <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">➕ 添加新电视设备</span>
           </div>
 
-          <div class="flex space-x-2">
-            <input v-model="manualIp" type="text" placeholder="输入 Apple TV IP (如 192.168.100.171)" 
-                   class="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-100 outline-none focus:border-blue-500">
-            <button @click="startPairManual" class="px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded-xl text-xs font-medium text-white shrink-0">
-              发起配对
+          <!-- 选项卡切换: Apple TV vs 安卓电视 -->
+          <div class="grid grid-cols-2 gap-2 p-1 bg-gray-800/80 rounded-xl">
+            <button @click="addTab = 'appletv'"
+                    class="py-1.5 text-xs font-medium rounded-lg transition flex items-center justify-center space-x-1"
+                    :class="addTab === 'appletv' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'">
+              <span>🍎 Apple TV</span>
             </button>
+            <button @click="addTab = 'androidtv'"
+                    class="py-1.5 text-xs font-medium rounded-lg transition flex items-center justify-center space-x-1"
+                    :class="addTab === 'androidtv' ? 'bg-emerald-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'">
+              <span>🤖 安卓电视 (ADB)</span>
+            </button>
+          </div>
+
+          <!-- Tab 1: Apple TV 配对 -->
+          <div v-if="addTab === 'appletv'" class="space-y-2.5">
+            <div class="flex space-x-2">
+              <input v-model="manualIp" type="text" placeholder="Apple TV IP (如 192.168.1.50)" 
+                     class="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-100 outline-none focus:border-blue-500">
+              <button @click="startPairManual" class="px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded-xl text-xs font-medium text-white shrink-0">
+                发起配对
+              </button>
+            </div>
+            <p class="text-[11px] text-gray-400 leading-relaxed">
+              * 提示：点击发起配对后，Apple TV 屏幕上会弹出一个 4 位数验证码，输入即可完成终身免密配对。
+            </p>
+          </div>
+
+          <!-- Tab 2: 安卓电视连接 -->
+          <div v-if="addTab === 'androidtv'" class="space-y-2.5">
+            <div class="space-y-2">
+              <div class="flex space-x-2">
+                <input v-model="androidIp" type="text" placeholder="安卓电视 IP (如 192.168.1.60)" 
+                       class="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-100 outline-none focus:border-emerald-500 font-mono">
+                <input v-model.number="androidPort" type="number" placeholder="5555" 
+                       class="w-16 bg-gray-800 border border-gray-700 rounded-xl px-2 py-2 text-xs text-gray-100 outline-none focus:border-emerald-500 font-mono text-center">
+              </div>
+              <div class="flex space-x-2">
+                <input v-model="androidName" type="text" placeholder="设备备注 (如: 客厅小米电视)" 
+                       class="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-100 outline-none focus:border-emerald-500">
+                <button @click="connectAndroid" :disabled="connectingAndroid" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-xs font-medium text-white shrink-0 disabled:opacity-50 flex items-center space-x-1">
+                  <i v-if="connectingAndroid" data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i>
+                  <span>{{ connectingAndroid ? '连接中...' : '连接电视' }}</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="p-3 bg-gray-800/40 rounded-xl border border-gray-800 text-[11px] text-gray-400 space-y-1 leading-relaxed">
+              <div class="font-medium text-gray-300">💡 安卓电视开启连接指引：</div>
+              <div>1. 确保电视与手机连在同一家里的 WiFi 局域网下；</div>
+              <div>2. 在电视【设置 ➔ 关于 ➔ 版本号】连续按 5 次确认键开启开发者模式；</div>
+              <div>3. 进入【设置 ➔ 开发者选项】，打开【网络调试 / USB 调试】（端口 5555）；</div>
+              <div>4. 点击上方【连接电视】，若电视屏幕弹出“允许调试吗？”，勾选始终允许并点击【确定】即可！</div>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- PIN 码输入弹窗 -->
+  <!-- Apple TV PIN 码输入弹窗 -->
   <div v-if="pairingSession" class="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4 backdrop-blur-md">
     <div class="bg-[#111827] border border-blue-500/60 rounded-2xl w-full max-w-sm p-6 space-y-4 shadow-2xl text-center">
       <div class="w-12 h-12 rounded-full bg-blue-600/20 text-blue-400 mx-auto flex items-center justify-center">
@@ -250,15 +323,24 @@ createApp({
     const devices = ref([]);
     const activeDevice = ref(null);
     const sending = ref(false);
+    const autoEnter = ref(false);
     const showDeviceModal = ref(false);
-    const manualIp = ref('192.168.100.171');
+    const addTab = ref('androidtv'); // default to androidtv or appletv
+    const manualIp = ref('');
     const pairingSession = ref(null);
     const pinInput = ref('');
+    
+    // Android TV form
+    const androidIp = ref('');
+    const androidPort = ref(5555);
+    const androidName = ref('安卓电视');
+    const connectingAndroid = ref(false);
+
     const toastMsg = ref('');
     const chatContainer = ref(null);
     const inputBox = ref(null);
 
-    const showToast = (msg, duration = 2500) => {
+    const showToast = (msg, duration = 3000) => {
       toastMsg.value = msg;
       nextTick(() => lucide.createIcons());
       setTimeout(() => { toastMsg.value = ''; }, duration);
@@ -278,10 +360,13 @@ createApp({
         const res = await fetch('/api/status');
         const data = await res.json();
         devices.value = data.devices || [];
-        if (data.settings && data.settings.default_device_id) {
-          activeDevice.value = devices.value.find(d => d.identifier === data.settings.default_device_id) || devices.value[0];
-        } else if (devices.value.length > 0) {
-          activeDevice.value = devices.value[0];
+        if (data.settings) {
+          autoEnter.value = !!data.settings.auto_enter;
+          if (data.settings.default_device_id) {
+            activeDevice.value = devices.value.find(d => (d.id || d.identifier) === data.settings.default_device_id) || devices.value[0];
+          } else if (devices.value.length > 0) {
+            activeDevice.value = devices.value[0];
+          }
         }
       } catch (e) {
         console.error(e);
@@ -304,12 +389,14 @@ createApp({
 
       sending.value = true;
       try {
+        const devId = activeDevice.value ? (activeDevice.value.id || activeDevice.value.identifier) : null;
         const res = await fetch('/api/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             text: text,
-            device_id: activeDevice.value ? activeDevice.value.identifier : null
+            device_id: devId,
+            auto_enter: autoEnter.value
           })
         });
         const data = await res.json();
@@ -319,7 +406,7 @@ createApp({
         }
         if (res.ok && data.ok) {
           inputText.value = '';
-          showToast('✅ 文本已发送到 Apple TV');
+          showToast('✅ 文本已注入电视！');
         } else {
           showToast('❌ ' + (data.error || data.detail || '发送失败'));
         }
@@ -350,9 +437,10 @@ createApp({
     const sendClear = async () => {
       if (navigator.vibrate) navigator.vibrate(20);
       try {
-        const res = await fetch('/api/clear', { method: 'POST' });
+        const devId = activeDevice.value ? (activeDevice.value.id || activeDevice.value.identifier) : null;
+        const res = await fetch('/api/clear' + (devId ? `?device_id=${encodeURIComponent(devId)}` : ''), { method: 'POST' });
         const data = await res.json();
-        showToast(res.ok ? '🧹 已清空输入框' : (data.detail || '清空失败'));
+        showToast(res.ok ? '🧹 已清空电视输入' : (data.detail || '清空失败'));
       } catch (e) {
         showToast('操作失败');
       }
@@ -361,15 +449,27 @@ createApp({
     const sendBackspace = async () => {
       if (navigator.vibrate) navigator.vibrate(25);
       try {
-        await fetch('/api/remote/backspace', { method: 'POST' });
+        const devId = activeDevice.value ? (activeDevice.value.id || activeDevice.value.identifier) : null;
+        await fetch(`/api/remote/backspace` + (devId ? `?device_id=${encodeURIComponent(devId)}` : ''), { method: 'POST' });
         showToast('⌫ 退格');
       } catch (e) {
         console.error(e);
       }
     };
 
+    const sendEnter = async () => {
+      if (navigator.vibrate) navigator.vibrate(25);
+      try {
+        const devId = activeDevice.value ? (activeDevice.value.id || activeDevice.value.identifier) : null;
+        await fetch(`/api/remote/enter` + (devId ? `?device_id=${encodeURIComponent(devId)}` : ''), { method: 'POST' });
+        showToast('↩ 回车确认');
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
     const startPair = async (address, name) => {
-      showToast('正在向 Apple TV 发起配对...', 3000);
+      showToast('正在向 Apple TV 发起配对...', 4000);
       try {
         const res = await fetch('/api/pair/start', {
           method: 'POST',
@@ -391,7 +491,7 @@ createApp({
 
     const startPairManual = () => {
       if (!manualIp.value.trim()) {
-        showToast('请输入有效的 IP 地址');
+        showToast('请输入有效的 Apple TV IP 地址');
         return;
       }
       startPair(manualIp.value.trim(), 'Apple TV');
@@ -424,27 +524,68 @@ createApp({
       }
     };
 
+    const connectAndroid = async () => {
+      const ip = androidIp.value.trim();
+      if (!ip) {
+        showToast('请输入安卓电视 IP 地址');
+        return;
+      }
+      connectingAndroid.value = true;
+      try {
+        const res = await fetch('/api/android/connect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            address: ip,
+            port: androidPort.value || 5555,
+            name: androidName.value.trim() || '安卓电视'
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+          showToast('🎉 ' + data.message, 4000);
+          showDeviceModal.value = false;
+          await loadStatus();
+        } else {
+          showToast('❌ ' + (data.detail || data.error || '连接失败'));
+        }
+      } catch (e) {
+        showToast('网络请求异常: ' + e.message);
+      } finally {
+        connectingAndroid.value = false;
+      }
+    };
+
     const selectDevice = async (dev) => {
       activeDevice.value = dev;
+      const devId = dev.id || dev.identifier;
       await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ default_device_id: dev.identifier })
+        body: JSON.stringify({ default_device_id: devId })
       });
       showDeviceModal.value = false;
       showToast(`已切换至: ${dev.name}`);
     };
 
     const removeDevice = async (devId) => {
-      if (!confirm('确定移除该设备的配对信息吗？')) return;
+      if (!confirm('确定移除该电视设备吗？')) return;
       try {
-        await fetch(`/api/devices/${devId}`, { method: 'DELETE' });
+        await fetch(`/api/devices/${encodeURIComponent(devId)}`, { method: 'DELETE' });
         await loadStatus();
         showToast('已移除设备');
       } catch (e) {
         showToast('删除失败');
       }
     };
+
+    watch(autoEnter, (val) => {
+      fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ auto_enter: val })
+      });
+    });
 
     onMounted(async () => {
       await loadStatus();
@@ -461,11 +602,12 @@ createApp({
     });
 
     return {
-      inputText, history, devices, activeDevice, sending,
-      showDeviceModal, manualIp, pairingSession, pinInput,
+      inputText, history, devices, activeDevice, sending, autoEnter,
+      showDeviceModal, addTab, manualIp, pairingSession, pinInput,
+      androidIp, androidPort, androidName, connectingAndroid,
       toastMsg, chatContainer, inputBox,
-      handleSend, quickResend, copyText, sendClear, sendBackspace,
-      startPair, startPairManual, submitPin, selectDevice, removeDevice
+      handleSend, quickResend, copyText, sendClear, sendBackspace, sendEnter,
+      startPair, startPairManual, submitPin, connectAndroid, selectDevice, removeDevice
     };
   }
 }).mount('#app');

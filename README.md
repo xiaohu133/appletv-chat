@@ -1,24 +1,28 @@
-# AppleTV Chat (Apple TV 局域网剪贴板与对话输入助手)
+# TV Chat (Apple TV & 安卓电视 局域网剪贴板与对话输入助手)
 
 [![Python 3.11](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg?logo=docker&logoColor=white)](https://www.docker.com/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-Web_UI-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-专为 **安卓 (Android) / Windows / 非苹果设备用户** 量身打造的局域网 Apple TV 文本与剪贴板输入利器。
+专为 **安卓 (Android) / Windows / 跨生态设备用户** 量身打造的局域网智能电视文本与剪贴板输入利器，现已**全面支持 Apple TV (tvOS) 与 安卓电视 (Android TV / 小米 / 索尼 / 雷鸟 / TCL / 海信等)**！
 
-无需依赖 iPhone / iPad，只需在安卓手机或电脑浏览器中打开网页，即可通过**类似微信 / 聊天气泡**的极简对话框，将长网址、M3U8 播放源、Token、账号密码等文本**一键秒级同步注入到 Apple TV 电视屏幕输入框**中！
+无需依赖 iPhone / iPad 或遥控器费劲拼音，只需在手机或电脑浏览器中打开网页，即可通过**类似微信 / 聊天气泡**的极简对话框，将长网址、M3U8 播放源、Token、账号密码等文本**一键秒级同步注入到电视屏幕输入框**中！
 
 ---
 
 ## ✨ 核心特性
 
 - 💬 **对话式聊天 UI**：像发微信一样发送文本，自动记录历史发送消息、时间戳与状态，支持一键重发与复制。
-- ⚡ **原生直写注入（零冗余字符）**：基于 Apple TV 官方 **Companion 协议**，直接写入文本框（`text_set`），100% 精准无误，不误触发屏幕虚拟键盘。
-- 🧹 **极简辅助按键**：操作栏精简至最实用的「**清空电视输入**」与「**退格键 (Backspace)**」。
-- 📺 **智能多端口与直连探测**：支持自动局域网扫描与手动 IP 探测（自适应 tvOS 动态分配端口），连接稳定抗干扰。
-- 🔐 **一次配对，永久免密**：首次只需输入电视上显示的 4 位数字 PIN 码，凭据加密持久化存储在本地。
-- 🐳 **轻量 Docker 容器**：开箱即用，资源占用极小（内存 < 30MB）。
+- 📺 **双协议合一（自由切换）**：
+  - 🍎 **Apple TV (tvOS)**：基于苹果官方 **Companion 协议**，直写输入框（`text_set`），100% 精准无误；
+  - 🤖 **安卓电视 (Android TV)**：基于原生 **ADB 网络调试协议**，剪贴板注入极速上屏，原生支持中文与 Emoji。
+- 🧹 **极简辅助按键**：操作栏包含「**清空电视输入**」、「**退格 (Backspace)**」与「**回车确认**」。
+- 🔐 **一次配对，永久免密**：
+  - Apple TV：首次输入电视屏幕显示的 4 位数字 PIN 码；
+  - 安卓电视：首次在电视屏幕点击「允许调试」；
+  - 凭据均加密持久化存储在数据卷中，重启免再次授权。
+- 🐳 **轻量 Docker 容器**：开箱即用，资源占用极小（内存 < 35MB）。
 
 ---
 

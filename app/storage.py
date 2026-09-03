@@ -30,7 +30,11 @@ def save_json(file_path: Path, data: Any):
         print(f"Error saving {file_path}: {e}")
 
 def get_devices() -> List[Dict[str, Any]]:
-    return load_json(DEVICES_FILE, [])
+    devs = load_json(DEVICES_FILE, [])
+    for d in devs:
+        if "type" not in d:
+            d["type"] = "appletv"
+    return devs
 
 def save_devices(devices: List[Dict[str, Any]]):
     save_json(DEVICES_FILE, devices)

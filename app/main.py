@@ -12,11 +12,12 @@ from .storage import (
     clear_history, delete_history_item, get_settings, update_settings
 )
 from .atv_manager import atv_mgr
+from .android_manager import android_mgr
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("appletv_chat")
 
-app = FastAPI(title="AppleTV Chat Input", description="Send clipboard & text to Apple TV from Android browser")
+app = FastAPI(title="TV Chat Input", description="Send clipboard & text to Apple TV and Android TV from mobile browser")
 
 BASE_DIR = Path(__file__).resolve().parent
 HTML_FILE = BASE_DIR / "templates" / "index.html"
@@ -34,6 +35,11 @@ class PairStartRequest(BaseModel):
 class PairFinishRequest(BaseModel):
     session_id: str
     pin: str
+
+class AndroidConnectRequest(BaseModel):
+    address: str
+    port: Optional[int] = 5555
+    name: Optional[str] = "安卓电视"
 
 class SettingsRequest(BaseModel):
     default_device_id: Optional[str] = None
@@ -77,6 +83,44 @@ async def pair_finish(req: PairFinishRequest):
         raise HTTPException(status_code=400, detail=res.get("error", "配对失败"))
     return res
 
+@app.post("/api/android/connect")
+async def connect_android_tv(req: AndroidConnectRequest):
+    port = req.port or 5555
+    res = await android_mgr.connect(req.address, port=port)
+    if not res.get("ok"):
+        raise HTTPException(status_code=400, detail=res.get("error", "连接失败"))
+    
+    target = res.get("target") or f"{req.address}:{port}"
+    devices = get_devices()
+    dev_id = f"adb_{target.replace(':', '_').replace('.', '_')}"
+    
+    existing = next((d for d in devices if d.get("id") == dev_id or d.get("address") == target), None)
+    if existing:
+        existing["name"] = req.name or existing.get("name", "安卓电视")
+        existing["type"] = "androidtv"
+        existing["status"] = res.get("status")
+    else:
+        devices.append({
+            "id": dev_id,
+            "name": req.name or "安卓电视",
+            "type": "androidtv",
+            "address": target,
+            "port": port,
+            "status": res.get("status")
+        })
+    save_devices(devices)
+    return {
+        "ok": True,
+        "status": res.get("status"),
+        "message": res.get("message"),
+        "device": {
+            "id": dev_id,
+            "name": req.name or "安卓电视",
+            "type": "androidtv",
+            "address": target
+        }
+    }
+
 @app.delete("/api/devices/{device_id}")
 async def remove_device(device_id: str):
     devices = get_devices()
@@ -84,23 +128,41 @@ async def remove_device(device_id: str):
     save_devices(new_devs)
     return {"ok": True, "message": "已移除该设备"}
 
+def _get_target_device(device_id: Optional[str] = None):
+    devices = get_devices()
+    if not devices:
+        return None
+    if device_id:
+        target = next((d for d in devices if d.get("id") == device_id or d.get("identifier") == device_id), None)
+        if target:
+            return target
+    # Check default setting
+    settings = get_settings()
+    def_id = settings.get("default_device_id")
+    if def_id:
+        target = next((d for d in devices if d.get("id") == def_id or d.get("identifier") == def_id), None)
+        if target:
+            return target
+    return devices[0]
+
 @app.post("/api/send")
 async def send_text(req: SendTextRequest):
     settings = get_settings()
     auto_enter = req.auto_enter if req.auto_enter is not None else settings.get("auto_enter", True)
     
-    # 查找目标设备名称
-    devices = get_devices()
-    dev_name = "Apple TV"
-    if req.device_id:
-        for d in devices:
-            if d.get("id") == req.device_id or d.get("identifier") == req.device_id:
-                dev_name = d.get("name", "Apple TV")
-                break
-    elif devices:
-        dev_name = devices[0].get("name", "Apple TV")
+    target_dev = _get_target_device(req.device_id)
+    if not target_dev:
+        return JSONResponse(status_code=400, content={"ok": False, "error": "尚未配对或连接任何电视设备"})
 
-    res = await atv_mgr.send_text(req.text, req.device_id, auto_enter=auto_enter)
+    dev_name = target_dev.get("name", "电视")
+    dev_type = target_dev.get("type", "appletv")
+    
+    if dev_type == "androidtv":
+        addr = target_dev.get("address")
+        res = await android_mgr.send_text(addr, req.text, auto_enter=auto_enter)
+    else:
+        atv_id = target_dev.get("identifier") or target_dev.get("id")
+        res = await atv_mgr.send_text(req.text, atv_id, auto_enter=auto_enter)
     
     # 记录到对话历史
     entry = add_history(
@@ -125,14 +187,32 @@ async def send_text(req: SendTextRequest):
 
 @app.post("/api/clear")
 async def clear_text(device_id: Optional[str] = None):
-    res = await atv_mgr.clear_text(device_id)
+    target_dev = _get_target_device(device_id)
+    if not target_dev:
+        raise HTTPException(status_code=400, detail="未找到目标设备")
+
+    if target_dev.get("type") == "androidtv":
+        res = await android_mgr.clear_text(target_dev.get("address"))
+    else:
+        atv_id = target_dev.get("identifier") or target_dev.get("id")
+        res = await atv_mgr.clear_text(atv_id)
+
     if not res.get("ok"):
         raise HTTPException(status_code=400, detail=res.get("error", "清空失败"))
     return res
 
 @app.post("/api/remote/{action}")
 async def remote_action(action: str, device_id: Optional[str] = None):
-    res = await atv_mgr.send_remote_command(action, device_id)
+    target_dev = _get_target_device(device_id)
+    if not target_dev:
+        raise HTTPException(status_code=400, detail="未找到目标设备")
+
+    if target_dev.get("type") == "androidtv":
+        res = await android_mgr.send_remote_command(action, target_dev.get("address"))
+    else:
+        atv_id = target_dev.get("identifier") or target_dev.get("id")
+        res = await atv_mgr.send_remote_command(action, atv_id)
+
     if not res.get("ok"):
         raise HTTPException(status_code=400, detail=res.get("error", "按键失败"))
     return res
