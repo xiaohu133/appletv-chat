@@ -318,13 +318,13 @@
           <div v-if="addTab === 'androidtv'" class="space-y-2.5">
             <div class="space-y-2">
               <div class="flex space-x-2">
-                <input v-model="androidIp" type="text" placeholder="电视 IP (如 192.168.100.104)" 
+                <input v-model="androidIp" type="text" placeholder="电视 IP (如 192.168.1.100)" 
                        class="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-100 outline-none focus:border-emerald-500 font-mono">
                 <input v-model.number="androidPort" type="number" placeholder="5555" 
                        class="w-16 bg-gray-800 border border-gray-700 rounded-xl px-2 py-2 text-xs text-gray-100 outline-none focus:border-emerald-500 font-mono text-center">
               </div>
               <div class="flex space-x-2">
-                <input v-model="androidName" type="text" placeholder="设备备注 (如: 索尼电视)" 
+                <input v-model="androidName" type="text" placeholder="设备备注 (如: 客厅电视)" 
                        class="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-100 outline-none focus:border-emerald-500">
                 <button @click="connectAndroid" :disabled="connectingAndroid" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-xs font-medium text-white shrink-0 disabled:opacity-50 flex items-center space-x-1">
                   <i v-if="connectingAndroid" data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i>
@@ -340,7 +340,7 @@
           <!-- 新增 Apple TV -->
           <div v-if="addTab === 'appletv'" class="space-y-2.5">
             <div class="flex space-x-2">
-              <input v-model="manualIp" type="text" placeholder="Apple TV IP (如 192.168.100.171)" 
+              <input v-model="manualIp" type="text" placeholder="Apple TV IP (如 192.168.1.200)" 
                      class="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs text-gray-100 outline-none focus:border-blue-500">
               <button @click="startPairManual" class="px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded-xl text-xs font-medium text-white shrink-0">
                 发起配对
@@ -418,9 +418,9 @@ createApp({
     const pinInput = ref('');
     
     // Android TV form
-    const androidIp = ref('192.168.100.104');
+    const androidIp = ref('');
     const androidPort = ref(5555);
-    const androidName = ref('索尼电视');
+    const androidName = ref('');
     const connectingAndroid = ref(false);
 
     const toastMsg = ref('');
