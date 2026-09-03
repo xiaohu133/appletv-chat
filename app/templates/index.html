@@ -449,13 +449,15 @@ createApp({
         devices.value = data.devices || [];
         if (data.settings) {
           autoEnter.value = !!data.settings.auto_enter;
-          // 若当前尚未选定，优先使用后台默认设备
-          if (!currentDeviceId.value) {
-            if (data.settings.default_device_id && devices.value.some(d => d.id === data.settings.default_device_id)) {
-              currentDeviceId.value = data.settings.default_device_id;
-            } else if (devices.value.length > 0) {
-              currentDeviceId.value = devices.value[0].id;
-            }
+          
+          // 优先使用本地缓存记录，其次使用后台持久化默认设备
+          const savedLocal = localStorage.getItem('selected_device_id');
+          if (savedLocal && devices.value.some(d => d.id === savedLocal)) {
+            currentDeviceId.value = savedLocal;
+          } else if (data.settings.default_device_id && devices.value.some(d => d.id === data.settings.default_device_id)) {
+            currentDeviceId.value = data.settings.default_device_id;
+          } else if (devices.value.length > 0) {
+            currentDeviceId.value = devices.value[0].id;
           }
         }
       } catch (e) {
@@ -477,20 +479,36 @@ createApp({
       return currentDeviceId.value || (activeDevice.value ? activeDevice.value.id : null);
     };
 
-    // 毫秒级即时切换设备（零阻塞，零延迟，无需刷新！）
-    const selectDevice = (dev) => {
+    // 切换设备：持久化后自动刷新页面，重置所有视图与连接状态
+    const selectDevice = async (dev) => {
       if (!dev || !dev.id) return;
+      if (dev.id === currentDeviceId.value) {
+        showDeviceModal.value = false;
+        return;
+      }
       currentDeviceId.value = dev.id;
+      try {
+        localStorage.setItem('selected_device_id', dev.id);
+      } catch (e) {}
       showDeviceModal.value = false;
       pairingSession.value = null;
-      showToast(`已切换控制: ${dev.name}`);
+      showToast(`已切换至: ${dev.name}，正在刷新...`);
       
-      // 异步后台持久化，绝不影响前端即时切换
-      fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ default_device_id: dev.id })
-      }).catch(e => console.error('Save settings error:', e));
+      // 提交后台保存为默认设备
+      try {
+        await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ default_device_id: dev.id })
+        });
+      } catch (e) {
+        console.error('Save settings error:', e);
+      }
+
+      // 自动重新加载网页
+      setTimeout(() => {
+        window.location.reload();
+      }, 250);
     };
 
     const handleSend = async () => {
@@ -616,10 +634,13 @@ createApp({
         });
         const data = await res.json();
         if (res.ok && data.ok) {
-          showToast('🎉 配对成功！');
+          showToast('🎉 配对成功！正在自动刷新...');
           pairingSession.value = null;
           showDeviceModal.value = false;
-          await loadStatus();
+          if (data.device && data.device.id) {
+            try { localStorage.setItem('selected_device_id', data.device.id); } catch (e) {}
+          }
+          setTimeout(() => window.location.reload(), 300);
         } else {
           showToast('❌ ' + (data.error || data.detail || 'PIN 码错误或已失效'));
         }
@@ -642,17 +663,17 @@ createApp({
           body: JSON.stringify({
             address: ip,
             port: androidPort.value || 5555,
-            name: androidName.value.trim() || '索尼电视'
+            name: androidName.value.trim() || '安卓电视'
           })
         });
         const data = await res.json();
         if (res.ok && data.ok) {
-          showToast('🎉 ' + data.message, 4000);
+          showToast('🎉 ' + data.message + '，正在自动刷新...', 4000);
           showDeviceModal.value = false;
-          await loadStatus();
           if (data.device && data.device.id) {
-            currentDeviceId.value = data.device.id;
+            try { localStorage.setItem('selected_device_id', data.device.id); } catch (e) {}
           }
+          setTimeout(() => window.location.reload(), 300);
         } else {
           showToast('❌ ' + (data.detail || data.error || '连接失败'));
         }
@@ -667,8 +688,9 @@ createApp({
       if (!confirm('确定移除该电视设备吗？')) return;
       try {
         await fetch(`/api/devices/${encodeURIComponent(devId)}`, { method: 'DELETE' });
-        await loadStatus();
-        showToast('已移除设备');
+        try { localStorage.removeItem('selected_device_id'); } catch (e) {}
+        showToast('已移除设备，正在自动刷新...');
+        setTimeout(() => window.location.reload(), 300);
       } catch (e) {
         showToast('删除失败');
       }
