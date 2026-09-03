@@ -97,13 +97,28 @@ class AndroidTVManager:
 
     async def ensure_connected(self, target: str) -> bool:
         state = await self.get_device_state(target)
-        if state == "device":
-            return True
-        res = await self.connect(target)
-        return res.get("status") == "connected"
+        if state != "device":
+            res = await self.connect(target)
+            if res.get("status") != "connected":
+                return False
+
+        # 确保 ADBKeyboard 已就绪
+        try:
+            code, out, _ = await self._run_adb("-s", target, "shell", "pm path com.android.adbkeyboard", timeout=2.0)
+            if "package:" not in out:
+                apk_path = Path(__file__).parent / "ADBKeyboard.apk"
+                if apk_path.exists():
+                    logger.info(f"正在为电视 {target} 自动安装 ADBKeyboard 输入助手...")
+                    await self._run_adb("-s", target, "install", "-r", str(apk_path), timeout=15.0)
+                    await self._run_adb("-s", target, "shell", "ime enable com.android.adbkeyboard/.AdbIME", timeout=2.0)
+                    await self._run_adb("-s", target, "shell", "settings put secure default_input_method com.android.adbkeyboard/.AdbIME", timeout=2.0)
+        except Exception as e:
+            logger.warning(f"ADBKeyboard 检查/安装异常: {e}")
+
+        return True
 
     async def send_text(self, target: str, text: str, auto_enter: bool = False) -> Dict[str, Any]:
-        """向安卓电视注入文本"""
+        """向安卓电视注入文本，原生自适应中英文、特殊字符与长链接"""
         if not await self.ensure_connected(target):
             state = await self.get_device_state(target)
             if state == "unauthorized":
@@ -114,36 +129,38 @@ class AndroidTVManager:
         if not clean_text:
             return {"ok": True, "message": "空文本无需发送"}
 
-        # 检查是否包含非 ASCII (如中文)
+        # 检查是否包含非 ASCII (如中文、日韩文、Emoji等)
         has_non_ascii = any(ord(c) > 127 for c in clean_text)
         
         if has_non_ascii:
-            # 对于中文，使用 AdbIME 广播
-            # 先尝试发送广播
-            code_b64, out_b64, _ = await self._run_adb("-s", target, "shell", f"am broadcast -a ADB_INPUT_TEXT --es msg '{clean_text}'", timeout=3.0)
-            logger.info(f"Chinese broadcast result: {code_b64} {out_b64}")
+            # 1. 确保 ADBKeyBoard 为活跃输入法
+            await self._run_adb("-s", target, "shell", "settings put secure default_input_method com.android.adbkeyboard/.AdbIME", timeout=2.0)
+            await self._run_adb("-s", target, "shell", "ime set com.android.adbkeyboard/.AdbIME", timeout=2.0)
+            
+            # 2. 转义单引号以安全传递给 shell
+            escaped_text = clean_text.replace("'", "'\\''")
+            broadcast_cmd = f"am broadcast -a ADB_INPUT_TEXT --es msg '{escaped_text}'"
+            logger.info(f"正在发送中文广播: {clean_text} 到 {target}")
+            code, out, err = await self._run_adb("-s", target, "shell", broadcast_cmd, timeout=4.0)
+            if code != 0 or "result=0" not in out:
+                logger.warning(f"ADB_INPUT_TEXT 广播未完全成功: {out} {err}")
+        else:
+            # 针对纯 ASCII、英文、数字、URL 或 Token，采用 input text 原生直写
+            safe_str = ""
+            for ch in clean_text:
+                if ch == " ":
+                    safe_str += "%s"
+                elif ch in '&;<>()|*~`"\'\\$':
+                    safe_str += f"\\{ch}"
+                else:
+                    safe_str += ch
 
-        # 针对 ASCII、链接、英文、数字、Token 的原生注入
-        # 转义空格为 %s，转义特殊字符
-        safe_str = ""
-        for ch in clean_text:
-            if ch == " ":
-                safe_str += "%s"
-            elif ch in '&;<>()|*~`"\'\\':
-                safe_str += f"\\{ch}"
-            else:
-                safe_str += ch
-
-        logger.info(f"正在发送 input text: {safe_str} 到 {target}")
-        code, out, err = await self._run_adb("-s", target, "shell", f"input text '{safe_str}'", timeout=4.0)
-        
-        if code != 0 and "Exception" in err:
-            logger.warning(f"input text 遇到异常: {err}")
-            # 如果是包含中文引发的 NullPointerException，但广播已发，则算已处理
-            if has_non_ascii:
-                pass
-            else:
-                return {"ok": False, "error": f"电视输入失败: {err}"}
+            logger.info(f"正在发送 input text: {safe_str} 到 {target}")
+            code, out, err = await self._run_adb("-s", target, "shell", f"input text '{safe_str}'", timeout=4.0)
+            if code != 0:
+                # 备选：如果 input text 失败，降级通过 ADB_INPUT_TEXT 发送
+                escaped_text = clean_text.replace("'", "'\\''")
+                await self._run_adb("-s", target, "shell", f"am broadcast -a ADB_INPUT_TEXT --es msg '{escaped_text}'", timeout=3.0)
 
         # 如果需要自动回车确认
         if auto_enter:
@@ -155,11 +172,14 @@ class AndroidTVManager:
         return {"ok": True, "message": "文本已注入电视！"}
 
     async def clear_text(self, target: str) -> Dict[str, Any]:
-        """清空电视输入框：移动到末尾后连续退格"""
+        """清空电视输入框：ADBKeyBoard 清空广播 + 移动到末尾后连续退格"""
         if not await self.ensure_connected(target):
             return {"ok": False, "error": "电视未连接"}
 
-        # 123 是 KEYCODE_MOVE_END，将光标移动到文本末尾，再发 25 次退格 (67)
+        # 1. 发送 ADBKeyBoard 清空广播
+        await self._run_adb("-s", target, "shell", "am broadcast -a ADB_CLEAR_TEXT", timeout=2.0)
+
+        # 2. 123 是 KEYCODE_MOVE_END，将光标移动到文本末尾，再发 25 次退格 (67)
         clear_cmd = "input keyevent 123"
         for _ in range(25):
             clear_cmd += " && input keyevent 67"
