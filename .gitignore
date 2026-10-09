@@ -42,3 +42,7 @@ Thumbs.db
 test_*.py
 inspect_*.py
 find_*.py
+
+# ADB & Local keys
+data/.android/
+data/ADBKeyboard.apk
